@@ -6,6 +6,56 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ============================================
+// AUTH
+// ============================================
+const USUARIO = 'admin';
+const CLAVE = 'ricky123';
+const SESSION_KEY = 'rickmobile_auth';
+
+function isLoggedIn() {
+  return sessionStorage.getItem(SESSION_KEY) === 'true';
+}
+
+function renderLogin() {
+  document.getElementById('app').innerHTML = `
+    <div class="login-overlay">
+      <div class="login-box">
+        <div class="login-logo">🏎️</div>
+        <div class="login-title">COLECCIÓN <span>RICKY</span></div>
+        <div class="login-subtitle">Ingresá tus credenciales</div>
+        <div class="form-field">
+          <label class="form-label">Usuario</label>
+          <input class="form-input" id="loginUser" type="text" placeholder="admin" autocomplete="username" />
+        </div>
+        <div class="form-field">
+          <label class="form-label">Contraseña</label>
+          <input class="form-input" id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <div class="login-error" id="loginError"></div>
+        <button class="btn btn-primary" id="loginBtn">Ingresar 🏁</button>
+      </div>
+    </div>
+  `;
+
+  const doLogin = () => {
+    const user = document.getElementById('loginUser').value.trim();
+    const pass = document.getElementById('loginPass').value.trim();
+    if (user === USUARIO && pass === CLAVE) {
+      sessionStorage.setItem(SESSION_KEY, 'true');
+      initApp();
+    } else {
+      const err = document.getElementById('loginError');
+      err.textContent = '⛔ Usuario o contraseña incorrectos';
+      document.getElementById('loginPass').value = '';
+    }
+  };
+
+  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('loginUser').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+}
+
+// ============================================
 // STATE
 // ============================================
 let allCars = [];
@@ -19,50 +69,62 @@ const CATEGORIES = ['Todos', 'F1', 'GT', 'LMP', 'Rally', 'Calle', 'NASCAR', 'Ind
 // ============================================
 // RENDER APP SHELL
 // ============================================
-document.getElementById('app').innerHTML = `
-  <div class="header">
-    <div class="header-top">
-      <div class="logo">COLECCIÓN <span>RICKY</span> 🏎️</div>
-      <div class="stats-pill" id="statsTotal">...</div>
+function initApp() {
+  document.getElementById('app').innerHTML = `
+    <div class="header">
+      <div class="header-top">
+        <div class="logo">COLECCIÓN <span>RICKY</span> 🏎️</div>
+        <div class="stats-pill" id="statsTotal">...</div>
+      </div>
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="Buscar por marca, modelo, referencia..." autocomplete="off" autocorrect="off" spellcheck="false" />
+      </div>
     </div>
-    <div class="search-wrap">
-      <span class="search-icon">🔍</span>
-      <input type="text" id="searchInput" placeholder="Buscar por marca, modelo, referencia..." autocomplete="off" autocorrect="off" spellcheck="false" />
+
+    <div class="filters" id="filtersBar"></div>
+    <div class="results-bar" id="resultsBar"></div>
+
+    <div class="cars-list" id="carsList">
+      <div class="loading">
+        <div class="loading-spinner"></div>
+        Cargando colección...
+      </div>
     </div>
-  </div>
 
-  <div class="filters" id="filtersBar"></div>
+    <button class="fab" id="fabAdd" title="Agregar auto">＋</button>
 
-  <div class="results-bar" id="resultsBar"></div>
-
-  <div class="cars-list" id="carsList">
-    <div class="loading">
-      <div class="loading-spinner"></div>
-      Cargando colección...
+    <div class="modal-overlay" id="detailOverlay">
+      <div class="modal" id="detailModal">
+        <div class="modal-handle"></div>
+        <div id="detailContent"></div>
+      </div>
     </div>
-  </div>
 
-  <button class="fab" id="fabAdd" title="Agregar auto">＋</button>
-
-  <!-- DETAIL MODAL -->
-  <div class="modal-overlay" id="detailOverlay">
-    <div class="modal" id="detailModal">
-      <div class="modal-handle"></div>
-      <div id="detailContent"></div>
+    <div class="modal-overlay" id="formOverlay">
+      <div class="modal" id="formModal">
+        <div class="modal-handle"></div>
+        <div class="modal-title" id="formTitle">Agregar Auto</div>
+        <div id="formContent"></div>
+      </div>
     </div>
-  </div>
 
-  <!-- ADD/EDIT MODAL -->
-  <div class="modal-overlay" id="formOverlay">
-    <div class="modal" id="formModal">
-      <div class="modal-handle"></div>
-      <div class="modal-title" id="formTitle">Agregar Auto</div>
-      <div id="formContent"></div>
-    </div>
-  </div>
+    <div class="toast" id="toast"></div>
+  `;
 
-  <div class="toast" id="toast"></div>
-`;
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    searchQuery = e.target.value;
+    applyFilters();
+  });
+  document.getElementById('fabAdd').addEventListener('click', () => openForm());
+  ['detailOverlay', 'formOverlay'].forEach(id => {
+    document.getElementById(id).addEventListener('click', (e) => {
+      if (e.target.id === id) closeOverlay(id);
+    });
+  });
+
+  loadCars();
+}
 
 // ============================================
 // LOAD DATA
@@ -73,10 +135,7 @@ async function loadCars() {
     .select('*')
     .order('id', { ascending: true });
 
-  if (error) {
-    showToast('Error cargando datos', true);
-    return;
-  }
+  if (error) { showToast('Error cargando datos', true); return; }
 
   allCars = data || [];
   updateStats();
@@ -98,8 +157,7 @@ function renderFilters() {
     return `
       <button class="filter-chip ${cat === activeCategory ? 'active' : ''}" data-cat="${cat}">
         ${cat} <span class="chip-count">${count}</span>
-      </button>
-    `;
+      </button>`;
   }).join('');
 
   bar.querySelectorAll('.filter-chip').forEach(btn => {
@@ -113,14 +171,12 @@ function renderFilters() {
 
 function applyFilters() {
   const q = searchQuery.toLowerCase().trim();
-
   filteredCars = allCars.filter(car => {
     const matchCat = activeCategory === 'Todos' || car.categoria === activeCategory;
     const matchSearch = !q || [car.marca, car.modelo, car.version, car.referencia, car.fabricante, car.dorsal]
       .some(v => v && String(v).toLowerCase().includes(q));
     return matchCat && matchSearch;
   });
-
   renderList();
 }
 
@@ -136,20 +192,14 @@ function renderList() {
     : `${filteredCars.length} de ${allCars.length} autos`;
 
   if (filteredCars.length === 0) {
-    list.innerHTML = `
-      <div class="empty">
-        <div class="empty-icon">🔍</div>
-        <div class="empty-text">Sin resultados</div>
-      </div>`;
+    list.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Sin resultados</div></div>`;
     return;
   }
 
   list.innerHTML = filteredCars.map(car => `
     <div class="car-card" data-id="${car.id}">
       <div class="car-photo">
-        ${car.foto_url
-          ? `<img src="${car.foto_url}" alt="${car.modelo}" loading="lazy" />`
-          : getCategoryEmoji(car.categoria)}
+        ${car.foto_url ? `<img src="${car.foto_url}" alt="${car.modelo}" loading="lazy" />` : getCategoryEmoji(car.categoria)}
       </div>
       <div class="car-info">
         <div class="car-main">${car.marca || ''} ${car.modelo || ''}</div>
@@ -183,13 +233,11 @@ function getCategoryEmoji(cat) {
 function openDetail(id) {
   currentDetail = allCars.find(c => c.id === id);
   if (!currentDetail) return;
-
   const car = currentDetail;
+
   document.getElementById('detailContent').innerHTML = `
     <div class="detail-photo">
-      ${car.foto_url
-        ? `<img src="${car.foto_url}" alt="${car.modelo}" />`
-        : `<span>${getCategoryEmoji(car.categoria)}</span>`}
+      ${car.foto_url ? `<img src="${car.foto_url}" alt="${car.modelo}" />` : `<span>${getCategoryEmoji(car.categoria)}</span>`}
     </div>
     <div class="photo-actions">
       <button class="btn-sm btn-sm-photo" id="changePhotoBtn">
@@ -198,94 +246,49 @@ function openDetail(id) {
       </button>
       ${car.foto_url ? `<button class="btn-sm btn-sm-delete" id="deletePhotoBtn">🗑️ Quitar</button>` : ''}
     </div>
-
     <div class="modal-separator"></div>
-
     <div class="detail-grid">
-      <div class="detail-field">
-        <div class="detail-label">Fabricante</div>
-        <div class="detail-value">${car.fabricante || '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Referencia</div>
-        <div class="detail-value">${car.referencia || '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Marca</div>
-        <div class="detail-value">${car.marca || '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Modelo</div>
-        <div class="detail-value">${car.modelo || '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Año</div>
-        <div class="detail-value">${car.año || '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Dorsal</div>
-        <div class="detail-value">${car.dorsal ? `#${car.dorsal}` : '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Categoría</div>
-        <div class="detail-value">${car.categoria || '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Caja</div>
-        <div class="detail-value">${car.caja || '—'}</div>
-      </div>
-      ${car.ed_especial ? `
-      <div class="detail-field full">
-        <div class="detail-label">Edición Especial</div>
-        <div class="detail-value">${car.ed_especial}</div>
-      </div>` : ''}
-      <div class="detail-field full">
-        <div class="detail-label">Versión</div>
-        <div class="detail-value">${car.version || '—'}</div>
-      </div>
-      ${car.notas ? `
-      <div class="detail-field full">
-        <div class="detail-label">Notas</div>
-        <div class="detail-value" style="font-size:14px;font-weight:400;font-family:var(--font-body)">${car.notas}</div>
-      </div>` : ''}
+      <div class="detail-field"><div class="detail-label">Fabricante</div><div class="detail-value">${car.fabricante || '—'}</div></div>
+      <div class="detail-field"><div class="detail-label">Referencia</div><div class="detail-value">${car.referencia || '—'}</div></div>
+      <div class="detail-field"><div class="detail-label">Marca</div><div class="detail-value">${car.marca || '—'}</div></div>
+      <div class="detail-field"><div class="detail-label">Modelo</div><div class="detail-value">${car.modelo || '—'}</div></div>
+      <div class="detail-field"><div class="detail-label">Año</div><div class="detail-value">${car.año || '—'}</div></div>
+      <div class="detail-field"><div class="detail-label">Dorsal</div><div class="detail-value">${car.dorsal ? `#${car.dorsal}` : '—'}</div></div>
+      <div class="detail-field"><div class="detail-label">Categoría</div><div class="detail-value">${car.categoria || '—'}</div></div>
+      <div class="detail-field"><div class="detail-label">Caja</div><div class="detail-value">${car.caja || '—'}</div></div>
+      ${car.ed_especial ? `<div class="detail-field full"><div class="detail-label">Edición Especial</div><div class="detail-value">${car.ed_especial}</div></div>` : ''}
+      <div class="detail-field full"><div class="detail-label">Versión</div><div class="detail-value">${car.version || '—'}</div></div>
+      ${car.notas ? `<div class="detail-field full"><div class="detail-label">Notas</div><div class="detail-value" style="font-size:14px;font-weight:400">${car.notas}</div></div>` : ''}
     </div>
-
     <button class="btn btn-secondary" id="editCarBtn">✏️ Editar</button>
     <button class="btn btn-secondary" id="deleteCarBtn" style="color:var(--alpine-pink);border-color:rgba(255,64,129,0.3);margin-top:8px;">🗑️ Eliminar</button>
   `;
 
   openOverlay('detailOverlay');
 
-  // Photo change
   document.getElementById('changePhotoInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (file) await uploadPhoto(car.id, file);
   });
 
-  // Delete photo
   const delPhotoBtn = document.getElementById('deletePhotoBtn');
-  if (delPhotoBtn) {
-    delPhotoBtn.addEventListener('click', async () => {
-      await updateCarField(car.id, { foto_url: '' });
-      closeOverlay('detailOverlay');
-      showToast('Foto eliminada');
-    });
-  }
+  if (delPhotoBtn) delPhotoBtn.addEventListener('click', async () => {
+    await updateCarField(car.id, { foto_url: '' });
+    closeOverlay('detailOverlay');
+    showToast('Foto eliminada');
+  });
 
-  // Edit
   document.getElementById('editCarBtn').addEventListener('click', () => {
     closeOverlay('detailOverlay');
     openForm(car);
   });
 
-  // Delete car
   document.getElementById('deleteCarBtn').addEventListener('click', async () => {
     if (!confirm(`¿Eliminar ${car.marca} ${car.modelo}?`)) return;
     const { error } = await supabase.from('autos').delete().eq('id', car.id);
     if (!error) {
       allCars = allCars.filter(c => c.id !== car.id);
-      applyFilters();
-      updateStats();
+      applyFilters(); updateStats(); renderFilters();
       closeOverlay('detailOverlay');
       showToast('Auto eliminado');
     }
@@ -296,16 +299,8 @@ async function uploadPhoto(carId, file) {
   showToast('Subiendo foto...');
   const ext = file.name.split('.').pop();
   const path = `auto-${carId}-${Date.now()}.${ext}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from('fotos-autos')
-    .upload(path, file, { upsert: true });
-
-  if (uploadError) {
-    showToast('Error subiendo foto', true);
-    return;
-  }
-
+  const { error: uploadError } = await supabase.storage.from('fotos-autos').upload(path, file, { upsert: true });
+  if (uploadError) { showToast('Error subiendo foto', true); return; }
   const { data: urlData } = supabase.storage.from('fotos-autos').getPublicUrl(path);
   await updateCarField(carId, { foto_url: urlData.publicUrl });
   closeOverlay('detailOverlay');
@@ -336,52 +331,24 @@ function openForm(car = null) {
         <input type="file" accept="image/*" capture="environment" id="formPhotoInput" />
       </div>
     </div>
-
     <div class="form-grid">
-      <div class="form-field">
-        <label class="form-label">Fabricante</label>
-        <input class="form-input" id="fFabricante" value="${car?.fabricante || ''}" placeholder="Scalextric" />
-      </div>
-      <div class="form-field">
-        <label class="form-label">Referencia</label>
-        <input class="form-input" id="fReferencia" value="${car?.referencia || ''}" placeholder="C1234" />
-      </div>
+      <div class="form-field"><label class="form-label">Fabricante</label><input class="form-input" id="fFabricante" value="${car?.fabricante || ''}" placeholder="Scalextric" /></div>
+      <div class="form-field"><label class="form-label">Referencia</label><input class="form-input" id="fReferencia" value="${car?.referencia || ''}" placeholder="C1234" /></div>
     </div>
-
     <div class="form-grid">
-      <div class="form-field">
-        <label class="form-label">Marca</label>
-        <input class="form-input" id="fMarca" value="${car?.marca || ''}" placeholder="Ferrari" />
-      </div>
-      <div class="form-field">
-        <label class="form-label">Modelo</label>
-        <input class="form-input" id="fModelo" value="${car?.modelo || ''}" placeholder="F40" />
-      </div>
+      <div class="form-field"><label class="form-label">Marca</label><input class="form-input" id="fMarca" value="${car?.marca || ''}" placeholder="Ferrari" /></div>
+      <div class="form-field"><label class="form-label">Modelo</label><input class="form-input" id="fModelo" value="${car?.modelo || ''}" placeholder="F40" /></div>
     </div>
-
-    <div class="form-field">
-      <label class="form-label">Versión / Descripción</label>
-      <input class="form-input" id="fVersion" value="${car?.version || ''}" placeholder="Le Mans 1995 #35" />
-    </div>
-
+    <div class="form-field"><label class="form-label">Versión / Descripción</label><input class="form-input" id="fVersion" value="${car?.version || ''}" placeholder="Le Mans 1995 #35" /></div>
     <div class="form-grid">
-      <div class="form-field">
-        <label class="form-label">Año</label>
-        <input class="form-input" id="fAño" type="text" inputmode="numeric" value="${car?.año || ''}" placeholder="1995" />
-      </div>
-      <div class="form-field">
-        <label class="form-label">Dorsal</label>
-        <input class="form-input" id="fDorsal" value="${car?.dorsal || ''}" placeholder="35" />
-      </div>
+      <div class="form-field"><label class="form-label">Año</label><input class="form-input" id="fAño" type="text" inputmode="numeric" value="${car?.año || ''}" placeholder="1995" /></div>
+      <div class="form-field"><label class="form-label">Dorsal</label><input class="form-input" id="fDorsal" value="${car?.dorsal || ''}" placeholder="35" /></div>
     </div>
-
     <div class="form-grid">
       <div class="form-field">
         <label class="form-label">Categoría</label>
         <select class="form-select" id="fCategoria">
-          ${['F1','GT','LMP','Rally','Calle','NASCAR','Indy','Camion'].map(c =>
-            `<option value="${c}" ${car?.categoria === c ? 'selected' : ''}>${c}</option>`
-          ).join('')}
+          ${['F1','GT','LMP','Rally','Calle','NASCAR','Indy','Camion'].map(c => `<option value="${c}" ${car?.categoria === c ? 'selected' : ''}>${c}</option>`).join('')}
         </select>
       </div>
       <div class="form-field">
@@ -393,34 +360,19 @@ function openForm(car = null) {
         </select>
       </div>
     </div>
-
-    <div class="form-field">
-      <label class="form-label">Edición Especial</label>
-      <input class="form-input" id="fEdEspecial" value="${car?.ed_especial || ''}" placeholder="Ej: 3973/5000" />
-    </div>
-
-    <div class="form-field">
-      <label class="form-label">Notas</label>
-      <textarea class="form-textarea" id="fNotas" placeholder="Observaciones...">${car?.notas || ''}</textarea>
-    </div>
-
+    <div class="form-field"><label class="form-label">Edición Especial</label><input class="form-input" id="fEdEspecial" value="${car?.ed_especial || ''}" placeholder="Ej: 3973/5000" /></div>
+    <div class="form-field"><label class="form-label">Notas</label><textarea class="form-textarea" id="fNotas" placeholder="Observaciones...">${car?.notas || ''}</textarea></div>
     <button class="btn btn-primary" id="saveCarBtn">${isEdit ? '💾 Guardar cambios' : '➕ Agregar auto'}</button>
     <button class="btn btn-secondary" id="cancelFormBtn">Cancelar</button>
   `;
 
-  // Photo input in form
   let pendingPhoto = null;
   document.getElementById('formPhotoInput').addEventListener('change', (e) => {
     pendingPhoto = e.target.files[0];
     if (pendingPhoto) showToast('Foto lista para subir 📸');
   });
-
-  document.getElementById('saveCarBtn').addEventListener('click', async () => {
-    await saveCar(car?.id, isEdit, pendingPhoto);
-  });
-
+  document.getElementById('saveCarBtn').addEventListener('click', async () => await saveCar(car?.id, isEdit, pendingPhoto));
   document.getElementById('cancelFormBtn').addEventListener('click', () => closeOverlay('formOverlay'));
-
   openOverlay('formOverlay');
 }
 
@@ -440,10 +392,7 @@ async function saveCar(existingId, isEdit, photoFile) {
     tengo: true,
   };
 
-  if (!fields.marca && !fields.modelo) {
-    showToast('Completá al menos marca o modelo', true);
-    return;
-  }
+  if (!fields.marca && !fields.modelo) { showToast('Completá al menos marca o modelo', true); return; }
 
   let savedId = existingId;
 
@@ -461,7 +410,6 @@ async function saveCar(existingId, isEdit, photoFile) {
     savedId = newId;
   }
 
-  // Upload photo if pending
   if (photoFile && savedId) {
     const ext = photoFile.name.split('.').pop();
     const path = `auto-${savedId}-${Date.now()}.${ext}`;
@@ -472,8 +420,7 @@ async function saveCar(existingId, isEdit, photoFile) {
     if (idx !== -1) allCars[idx].foto_url = urlData.publicUrl;
   }
 
-  updateStats();
-  applyFilters();
+  updateStats(); renderFilters(); applyFilters();
   closeOverlay('formOverlay');
   showToast(isEdit ? '✅ Auto actualizado' : '✅ Auto agregado');
 }
@@ -491,16 +438,6 @@ function closeOverlay(id) {
   document.body.style.overflow = '';
 }
 
-// Close on overlay click
-['detailOverlay', 'formOverlay'].forEach(id => {
-  document.getElementById(id).addEventListener('click', (e) => {
-    if (e.target.id === id) closeOverlay(id);
-  });
-});
-
-// ============================================
-// TOAST
-// ============================================
 function showToast(msg, isError = false) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -510,16 +447,10 @@ function showToast(msg, isError = false) {
 }
 
 // ============================================
-// EVENTS
-// ============================================
-document.getElementById('searchInput').addEventListener('input', (e) => {
-  searchQuery = e.target.value;
-  applyFilters();
-});
-
-document.getElementById('fabAdd').addEventListener('click', () => openForm());
-
-// ============================================
 // INIT
 // ============================================
-loadCars();
+if (isLoggedIn()) {
+  initApp();
+} else {
+  renderLogin();
+}
