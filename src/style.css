@@ -4,20 +4,22 @@
    ============================================ */
 
 :root {
-  --red: #E31E24;
-  --red-dark: #B01519;
-  --red-glow: rgba(227,30,36,0.15);
-  --black: #0A0A0A;
-  --dark: #111111;
-  --card: #1A1A1A;
-  --card-hover: #222222;
-  --border: #2A2A2A;
-  --text: #F0F0F0;
-  --text-muted: #888;
-  --text-dim: #555;
-  --gold: #C9A84C;
+  --red: #0078D4;
+  --red-dark: #005FA3;
+  --red-glow: rgba(0,120,212,0.15);
+  --black: #080C14;
+  --dark: #0D1320;
+  --card: #111827;
+  --card-hover: #1A2438;
+  --border: #1E2D45;
+  --text: #F0F4FF;
+  --text-muted: #7A90B0;
+  --text-dim: #3D5270;
+  --gold: #FF4081;
   --green: #22C55E;
-  --blue: #3B82F6;
+  --blue: #0078D4;
+  --alpine-blue: #0078D4;
+  --alpine-pink: #FF4081;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -33,7 +35,7 @@ body {
 /* ---- HEADER ---- */
 .header {
   background: var(--dark);
-  border-bottom: 2px solid var(--red);
+  border-bottom: 2px solid var(--alpine-blue);
   padding: 12px 16px;
   position: sticky;
   top: 0;
@@ -60,7 +62,7 @@ body {
 }
 
 .stats-pill {
-  background: var(--red);
+  background: var(--alpine-pink);
   color: white;
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
@@ -135,8 +137,8 @@ body {
 .filter-chip:active { transform: scale(0.95); }
 
 .filter-chip.active {
-  background: var(--red);
-  border-color: var(--red);
+  background: var(--alpine-blue);
+  border-color: var(--alpine-blue);
   color: white;
 }
 
@@ -179,7 +181,7 @@ body {
   top: 0;
   bottom: 0;
   width: 3px;
-  background: var(--red);
+  background: var(--alpine-blue);
   opacity: 0;
   transition: opacity 0.2s;
 }
@@ -271,7 +273,7 @@ body {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800;
   font-size: 22px;
-  color: var(--red);
+  color: var(--alpine-pink);
   line-height: 1;
 }
 
@@ -282,7 +284,7 @@ body {
   right: 20px;
   width: 56px;
   height: 56px;
-  background: var(--red);
+  background: var(--alpine-pink);
   color: white;
   border: none;
   border-radius: 50%;
@@ -292,13 +294,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 20px rgba(227,30,36,0.4);
+  box-shadow: 0 4px 20px rgba(255,64,129,0.4);
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
 .fab:active {
   transform: scale(0.93);
-  box-shadow: 0 2px 10px rgba(227,30,36,0.3);
+  box-shadow: 0 2px 10px rgba(255,64,129,0.3);
 }
 
 /* ---- MODAL ---- */
@@ -498,7 +500,7 @@ body {
 
 .btn:active { transform: scale(0.98); }
 
-.btn-primary { background: var(--red); color: white; }
+.btn-primary { background: var(--alpine-blue); color: white; }
 .btn-primary:active { background: var(--red-dark); }
 .btn-secondary {
   background: transparent;
