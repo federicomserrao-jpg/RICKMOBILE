@@ -130,14 +130,26 @@ function initApp() {
 // LOAD DATA
 // ============================================
 async function loadCars() {
-  const { data, error } = await supabase
-    .from('autos')
-    .select('*')
-    .order('id', { ascending: true });
+  let all = [];
+  let from = 0;
+  const pageSize = 1000;
 
-  if (error) { showToast('Error cargando datos', true); return; }
+  while (true) {
+    const { data, error } = await supabase
+      .from('autos')
+      .select('*')
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1);
 
-  allCars = data || [];
+    if (error) { showToast('Error cargando datos', true); return; }
+    if (!data || data.length === 0) break;
+
+    all = all.concat(data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  allCars = all;
   updateStats();
   renderFilters();
   applyFilters();
