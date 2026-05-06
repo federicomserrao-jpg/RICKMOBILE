@@ -142,6 +142,21 @@ body {
   color: white;
 }
 
+.chip-count {
+  display: inline-block;
+  background: rgba(255,255,255,0.15);
+  border-radius: 10px;
+  font-size: 11px;
+  padding: 0px 5px;
+  margin-left: 3px;
+  font-weight: 700;
+}
+
+.filter-chip:not(.active) .chip-count {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-dim);
+}
+
 /* ---- RESULTS COUNT ---- */
 .results-bar {
   padding: 6px 16px;
