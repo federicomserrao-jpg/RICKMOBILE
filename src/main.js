@@ -1,522 +1,634 @@
-// main.js - Scalextric Catalog App
-import { createClient } from '@supabase/supabase-js';
+/* ============================================
+   SCALEXTRIC CATALOG - RICKY'S COLLECTION
+   Mobile-first, Racing aesthetic
+   ============================================ */
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// ============================================
-// STATE
-// ============================================
-let allCars = [];
-let filteredCars = [];
-let activeCategory = 'Todos';
-let searchQuery = '';
-let currentDetail = null;
-
-const CATEGORIES = ['Todos', 'F1', 'GT', 'LMP', 'Rally', 'Calle', 'NASCAR', 'Indy', 'Camion'];
-
-// ============================================
-// RENDER APP SHELL
-// ============================================
-document.getElementById('app').innerHTML = `
-  <div class="header">
-    <div class="header-top">
-      <div class="logo">COLECCIÓN <span>RICKY</span> 🏔️</div>
-      <div class="stats-pill" id="statsTotal">...</div>
-    </div>
-    <div class="search-wrap">
-      <span class="search-icon">🔍</span>
-      <input type="text" id="searchInput" placeholder="Buscar por marca, modelo, referencia..." autocomplete="off" autocorrect="off" spellcheck="false" />
-    </div>
-  </div>
-
-  <div class="filters" id="filtersBar"></div>
-
-  <div class="results-bar" id="resultsBar"></div>
-
-  <div class="cars-list" id="carsList">
-    <div class="loading">
-      <div class="loading-spinner"></div>
-      Cargando colección...
-    </div>
-  </div>
-
-  <button class="fab" id="fabAdd" title="Agregar auto">＋</button>
-
-  <!-- DETAIL MODAL -->
-  <div class="modal-overlay" id="detailOverlay">
-    <div class="modal" id="detailModal">
-      <div class="modal-handle"></div>
-      <div id="detailContent"></div>
-    </div>
-  </div>
-
-  <!-- ADD/EDIT MODAL -->
-  <div class="modal-overlay" id="formOverlay">
-    <div class="modal" id="formModal">
-      <div class="modal-handle"></div>
-      <div class="modal-title" id="formTitle">Agregar Auto</div>
-      <div id="formContent"></div>
-    </div>
-  </div>
-
-  <div class="toast" id="toast"></div>
-`;
-
-// ============================================
-// LOAD DATA
-// ============================================
-async function loadCars() {
-  const { data, error } = await supabase
-    .from('autos')
-    .select('*')
-    .order('id', { ascending: true });
-
-  if (error) {
-    showToast('Error cargando datos', true);
-    return;
-  }
-
-  allCars = data || [];
-  updateStats();
-  renderFilters();
-  applyFilters();
+:root {
+  --red: #0078D4;
+  --red-dark: #005FA3;
+  --red-glow: rgba(0,120,212,0.15);
+  --black: #080C14;
+  --dark: #0D1320;
+  --card: #111827;
+  --card-hover: #1A2438;
+  --border: #1E2D45;
+  --text: #F0F4FF;
+  --text-muted: #7A90B0;
+  --text-dim: #3D5270;
+  --gold: #FF4081;
+  --green: #22C55E;
+  --blue: #0078D4;
+  --alpine-blue: #0078D4;
+  --alpine-pink: #FF4081;
 }
 
-function updateStats() {
-  document.getElementById('statsTotal').textContent = `${allCars.length} autos`;
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: 'Barlow', sans-serif;
+  background: var(--black);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
-// ============================================
-// FILTERS
-// ============================================
-function renderFilters() {
-  const bar = document.getElementById('filtersBar');
-  bar.innerHTML = CATEGORIES.map(cat => `
-    <button class="filter-chip ${cat === activeCategory ? 'active' : ''}" data-cat="${cat}">
-      ${cat}
-    </button>
-  `).join('');
-
-  bar.querySelectorAll('.filter-chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      activeCategory = btn.dataset.cat;
-      bar.querySelectorAll('.filter-chip').forEach(b => b.classList.toggle('active', b.dataset.cat === activeCategory));
-      applyFilters();
-    });
-  });
+/* ---- HEADER ---- */
+.header {
+  background: var(--dark);
+  border-bottom: 2px solid var(--alpine-blue);
+  padding: 12px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
-function applyFilters() {
-  const q = searchQuery.toLowerCase().trim();
-
-  filteredCars = allCars.filter(car => {
-    const matchCat = activeCategory === 'Todos' || car.categoria === activeCategory;
-    const matchSearch = !q || [car.marca, car.modelo, car.version, car.referencia, car.fabricante, car.dorsal]
-      .some(v => v && String(v).toLowerCase().includes(q));
-    return matchCat && matchSearch;
-  });
-
-  renderList();
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
 }
 
-// ============================================
-// RENDER LIST
-// ============================================
-function renderList() {
-  const list = document.getElementById('carsList');
-  const bar = document.getElementById('resultsBar');
-
-  bar.textContent = filteredCars.length === allCars.length
-    ? `${allCars.length} autos en la colección`
-    : `${filteredCars.length} de ${allCars.length} autos`;
-
-  if (filteredCars.length === 0) {
-    list.innerHTML = `
-      <div class="empty">
-        <div class="empty-icon">🔍</div>
-        <div class="empty-text">Sin resultados</div>
-      </div>`;
-    return;
-  }
-
-  list.innerHTML = filteredCars.map(car => `
-    <div class="car-card" data-id="${car.id}">
-      <div class="car-photo">
-        ${car.foto_url
-          ? `<img src="${car.foto_url}" alt="${car.modelo}" loading="lazy" />`
-          : getCategoryEmoji(car.categoria)}
-      </div>
-      <div class="car-info">
-        <div class="car-main">${car.marca || ''} ${car.modelo || ''}</div>
-        <div class="car-version">${car.version || '—'}</div>
-        <div class="car-tags">
-          ${car.categoria ? `<span class="tag tag-cat">${car.categoria}</span>` : ''}
-          ${car.fabricante ? `<span class="tag tag-fab">${car.fabricante}</span>` : ''}
-          ${car.año ? `<span class="tag tag-año">${car.año}</span>` : ''}
-          ${car.caja ? `<span class="tag ${car.caja === 'Si' ? 'tag-caja-si' : 'tag-caja-no'}">${car.caja === 'Si' ? '📦 Con caja' : '🚫 Sin caja'}</span>` : ''}
-        </div>
-      </div>
-      <div class="car-right">
-        ${car.dorsal ? `<div class="car-dorsal">#${car.dorsal}</div>` : ''}
-      </div>
-    </div>
-  `).join('');
-
-  list.querySelectorAll('.car-card').forEach(card => {
-    card.addEventListener('click', () => openDetail(parseInt(card.dataset.id)));
-  });
+.logo {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 1px;
+  color: var(--text);
 }
 
-function getCategoryEmoji(cat) {
-  const map = { F1: '🏎️', GT: '🚗', LMP: '🏁', Rally: '🚙', Calle: '🚕', NASCAR: '🔴', Indy: '🟡', Camion: '🚛' };
-  return map[cat] || '🏎️';
+.logo span {
+  color: var(--red);
 }
 
-// ============================================
-// DETAIL MODAL
-// ============================================
-function openDetail(id) {
-  currentDetail = allCars.find(c => c.id === id);
-  if (!currentDetail) return;
-
-  const car = currentDetail;
-  document.getElementById('detailContent').innerHTML = `
-    <div class="detail-photo">
-      ${car.foto_url
-        ? `<img src="${car.foto_url}" alt="${car.modelo}" />`
-        : `<span>${getCategoryEmoji(car.categoria)}</span>`}
-    </div>
-    <div class="photo-actions">
-      <button class="btn-sm btn-sm-photo" id="changePhotoBtn">
-        📷 ${car.foto_url ? 'Cambiar foto' : 'Agregar foto'}
-        <input type="file" accept="image/*" capture="environment" id="changePhotoInput" />
-      </button>
-      ${car.foto_url ? `<button class="btn-sm btn-sm-delete" id="deletePhotoBtn">🗑️ Quitar</button>` : ''}
-    </div>
-
-    <div class="modal-separator"></div>
-
-    <div class="detail-grid">
-      <div class="detail-field">
-        <div class="detail-label">Fabricante</div>
-        <div class="detail-value">${car.fabricante || '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Referencia</div>
-        <div class="detail-value">${car.referencia || '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Marca</div>
-        <div class="detail-value">${car.marca || '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Modelo</div>
-        <div class="detail-value">${car.modelo || '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Año</div>
-        <div class="detail-value">${car.año || '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Dorsal</div>
-        <div class="detail-value">${car.dorsal ? `#${car.dorsal}` : '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Categoría</div>
-        <div class="detail-value">${car.categoria || '—'}</div>
-      </div>
-      <div class="detail-field">
-        <div class="detail-label">Caja</div>
-        <div class="detail-value">${car.caja || '—'}</div>
-      </div>
-      ${car.ed_especial ? `
-      <div class="detail-field full">
-        <div class="detail-label">Edición Especial</div>
-        <div class="detail-value">${car.ed_especial}</div>
-      </div>` : ''}
-      <div class="detail-field full">
-        <div class="detail-label">Versión</div>
-        <div class="detail-value">${car.version || '—'}</div>
-      </div>
-      ${car.notas ? `
-      <div class="detail-field full">
-        <div class="detail-label">Notas</div>
-        <div class="detail-value" style="font-size:14px;font-weight:400;font-family:var(--font-body)">${car.notas}</div>
-      </div>` : ''}
-    </div>
-
-    <button class="btn btn-secondary" id="editCarBtn">✏️ Editar</button>
-    <button class="btn btn-secondary" id="deleteCarBtn" style="color:var(--alpine-pink);border-color:rgba(255,64,129,0.3);margin-top:8px;">🗑️ Eliminar</button>
-  `;
-
-  openOverlay('detailOverlay');
-
-  // Photo change
-  document.getElementById('changePhotoInput').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (file) await uploadPhoto(car.id, file);
-  });
-
-  // Delete photo
-  const delPhotoBtn = document.getElementById('deletePhotoBtn');
-  if (delPhotoBtn) {
-    delPhotoBtn.addEventListener('click', async () => {
-      await updateCarField(car.id, { foto_url: '' });
-      closeOverlay('detailOverlay');
-      showToast('Foto eliminada');
-    });
-  }
-
-  // Edit
-  document.getElementById('editCarBtn').addEventListener('click', () => {
-    closeOverlay('detailOverlay');
-    openForm(car);
-  });
-
-  // Delete car
-  document.getElementById('deleteCarBtn').addEventListener('click', async () => {
-    if (!confirm(`¿Eliminar ${car.marca} ${car.modelo}?`)) return;
-    const { error } = await supabase.from('autos').delete().eq('id', car.id);
-    if (!error) {
-      allCars = allCars.filter(c => c.id !== car.id);
-      applyFilters();
-      updateStats();
-      closeOverlay('detailOverlay');
-      showToast('Auto eliminado');
-    }
-  });
+.stats-pill {
+  background: var(--alpine-pink);
+  color: white;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
 }
 
-async function uploadPhoto(carId, file) {
-  showToast('Subiendo foto...');
-  const ext = file.name.split('.').pop();
-  const path = `auto-${carId}-${Date.now()}.${ext}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from('fotos-autos')
-    .upload(path, file, { upsert: true });
-
-  if (uploadError) {
-    showToast('Error subiendo foto', true);
-    return;
-  }
-
-  const { data: urlData } = supabase.storage.from('fotos-autos').getPublicUrl(path);
-  await updateCarField(carId, { foto_url: urlData.publicUrl });
-  closeOverlay('detailOverlay');
-  showToast('¡Foto guardada! 📸');
+/* ---- SEARCH ---- */
+.search-wrap {
+  position: relative;
 }
 
-async function updateCarField(carId, fields) {
-  const { error } = await supabase.from('autos').update(fields).eq('id', carId);
-  if (!error) {
-    const idx = allCars.findIndex(c => c.id === carId);
-    if (idx !== -1) allCars[idx] = { ...allCars[idx], ...fields };
-    applyFilters();
-  }
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  pointer-events: none;
 }
 
-// ============================================
-// ADD / EDIT FORM
-// ============================================
-function openForm(car = null) {
-  const isEdit = !!car;
-  document.getElementById('formTitle').textContent = isEdit ? 'Editar Auto' : 'Agregar Auto';
-
-  document.getElementById('formContent').innerHTML = `
-    <div class="form-field">
-      <label class="form-label">Foto</label>
-      <div class="btn btn-upload-photo">
-        📷 ${car?.foto_url ? 'Cambiar foto' : 'Tomar / Subir foto'}
-        <input type="file" accept="image/*" capture="environment" id="formPhotoInput" />
-      </div>
-    </div>
-
-    <div class="form-grid">
-      <div class="form-field">
-        <label class="form-label">Fabricante</label>
-        <input class="form-input" id="fFabricante" value="${car?.fabricante || ''}" placeholder="Scalextric" />
-      </div>
-      <div class="form-field">
-        <label class="form-label">Referencia</label>
-        <input class="form-input" id="fReferencia" value="${car?.referencia || ''}" placeholder="C1234" />
-      </div>
-    </div>
-
-    <div class="form-grid">
-      <div class="form-field">
-        <label class="form-label">Marca</label>
-        <input class="form-input" id="fMarca" value="${car?.marca || ''}" placeholder="Ferrari" />
-      </div>
-      <div class="form-field">
-        <label class="form-label">Modelo</label>
-        <input class="form-input" id="fModelo" value="${car?.modelo || ''}" placeholder="F40" />
-      </div>
-    </div>
-
-    <div class="form-field">
-      <label class="form-label">Versión / Descripción</label>
-      <input class="form-input" id="fVersion" value="${car?.version || ''}" placeholder="Le Mans 1995 #35" />
-    </div>
-
-    <div class="form-grid">
-      <div class="form-field">
-        <label class="form-label">Año</label>
-        <input class="form-input" id="fAño" type="text" inputmode="numeric" value="${car?.año || ''}" placeholder="1995" />
-      </div>
-      <div class="form-field">
-        <label class="form-label">Dorsal</label>
-        <input class="form-input" id="fDorsal" value="${car?.dorsal || ''}" placeholder="35" />
-      </div>
-    </div>
-
-    <div class="form-grid">
-      <div class="form-field">
-        <label class="form-label">Categoría</label>
-        <select class="form-select" id="fCategoria">
-          ${['F1','GT','LMP','Rally','Calle','NASCAR','Indy','Camion'].map(c =>
-            `<option value="${c}" ${car?.categoria === c ? 'selected' : ''}>${c}</option>`
-          ).join('')}
-        </select>
-      </div>
-      <div class="form-field">
-        <label class="form-label">Caja</label>
-        <select class="form-select" id="fCaja">
-          <option value="Si" ${car?.caja === 'Si' ? 'selected' : ''}>Con caja</option>
-          <option value="No" ${car?.caja === 'No' ? 'selected' : ''}>Sin caja</option>
-          <option value="Rocco" ${car?.caja === 'Rocco' ? 'selected' : ''}>Rocco</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-field">
-      <label class="form-label">Edición Especial</label>
-      <input class="form-input" id="fEdEspecial" value="${car?.ed_especial || ''}" placeholder="Ej: 3973/5000" />
-    </div>
-
-    <div class="form-field">
-      <label class="form-label">Notas</label>
-      <textarea class="form-textarea" id="fNotas" placeholder="Observaciones...">${car?.notas || ''}</textarea>
-    </div>
-
-    <button class="btn btn-primary" id="saveCarBtn">${isEdit ? '💾 Guardar cambios' : '➕ Agregar auto'}</button>
-    <button class="btn btn-secondary" id="cancelFormBtn">Cancelar</button>
-  `;
-
-  // Photo input in form
-  let pendingPhoto = null;
-  document.getElementById('formPhotoInput').addEventListener('change', (e) => {
-    pendingPhoto = e.target.files[0];
-    if (pendingPhoto) showToast('Foto lista para subir 📸');
-  });
-
-  document.getElementById('saveCarBtn').addEventListener('click', async () => {
-    await saveCar(car?.id, isEdit, pendingPhoto);
-  });
-
-  document.getElementById('cancelFormBtn').addEventListener('click', () => closeOverlay('formOverlay'));
-
-  openOverlay('formOverlay');
+#searchInput {
+  width: 100%;
+  background: var(--black);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: 'Barlow', sans-serif;
+  font-size: 16px;
+  padding: 10px 12px 10px 38px;
+  outline: none;
+  transition: border-color 0.2s;
 }
 
-async function saveCar(existingId, isEdit, photoFile) {
-  const fields = {
-    fabricante: document.getElementById('fFabricante').value.trim(),
-    referencia: document.getElementById('fReferencia').value.trim(),
-    marca: document.getElementById('fMarca').value.trim(),
-    modelo: document.getElementById('fModelo').value.trim(),
-    version: document.getElementById('fVersion').value.trim(),
-    año: document.getElementById('fAño').value.trim(),
-    dorsal: document.getElementById('fDorsal').value.trim(),
-    categoria: document.getElementById('fCategoria').value,
-    caja: document.getElementById('fCaja').value,
-    ed_especial: document.getElementById('fEdEspecial').value.trim(),
-    notas: document.getElementById('fNotas').value.trim(),
-    tengo: true,
-  };
-
-  if (!fields.marca && !fields.modelo) {
-    showToast('Completá al menos marca o modelo', true);
-    return;
-  }
-
-  let savedId = existingId;
-
-  if (isEdit) {
-    const { error } = await supabase.from('autos').update(fields).eq('id', existingId);
-    if (error) { showToast('Error guardando', true); return; }
-    const idx = allCars.findIndex(c => c.id === existingId);
-    if (idx !== -1) allCars[idx] = { ...allCars[idx], ...fields };
-  } else {
-    const maxId = allCars.length > 0 ? Math.max(...allCars.map(c => c.id)) : 0;
-    const newId = maxId + 1;
-    const { data, error } = await supabase.from('autos').insert({ id: newId, ...fields }).select().single();
-    if (error) { showToast('Error guardando', true); return; }
-    allCars.push(data);
-    savedId = newId;
-  }
-
-  // Upload photo if pending
-  if (photoFile && savedId) {
-    const ext = photoFile.name.split('.').pop();
-    const path = `auto-${savedId}-${Date.now()}.${ext}`;
-    await supabase.storage.from('fotos-autos').upload(path, photoFile, { upsert: true });
-    const { data: urlData } = supabase.storage.from('fotos-autos').getPublicUrl(path);
-    await supabase.from('autos').update({ foto_url: urlData.publicUrl }).eq('id', savedId);
-    const idx = allCars.findIndex(c => c.id === savedId);
-    if (idx !== -1) allCars[idx].foto_url = urlData.publicUrl;
-  }
-
-  updateStats();
-  applyFilters();
-  closeOverlay('formOverlay');
-  showToast(isEdit ? '✅ Auto actualizado' : '✅ Auto agregado');
+#searchInput:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px var(--red-glow);
 }
 
-// ============================================
-// MODAL HELPERS
-// ============================================
-function openOverlay(id) {
-  document.getElementById(id).classList.add('open');
-  document.body.style.overflow = 'hidden';
+#searchInput::placeholder { color: var(--text-dim); }
+
+/* ---- FILTERS ---- */
+.filters {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
-function closeOverlay(id) {
-  document.getElementById(id).classList.remove('open');
-  document.body.style.overflow = '';
+.filters::-webkit-scrollbar { display: none; }
+
+.filter-chip {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  user-select: none;
 }
 
-// Close on overlay click
-['detailOverlay', 'formOverlay'].forEach(id => {
-  document.getElementById(id).addEventListener('click', (e) => {
-    if (e.target.id === id) closeOverlay(id);
-  });
-});
+.filter-chip:active { transform: scale(0.95); }
 
-// ============================================
-// TOAST
-// ============================================
-function showToast(msg, isError = false) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.toggle('error', isError);
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+.filter-chip.active {
+  background: var(--alpine-blue);
+  border-color: var(--alpine-blue);
+  color: white;
 }
 
-// ============================================
-// EVENTS
-// ============================================
-document.getElementById('searchInput').addEventListener('input', (e) => {
-  searchQuery = e.target.value;
-  applyFilters();
-});
+.chip-count {
+  display: inline-block;
+  background: rgba(255,255,255,0.15);
+  border-radius: 10px;
+  font-size: 11px;
+  padding: 0px 5px;
+  margin-left: 3px;
+  font-weight: 700;
+}
 
-document.getElementById('fabAdd').addEventListener('click', () => openForm());
+.filter-chip:not(.active) .chip-count {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-dim);
+}
 
-// ============================================
-// INIT
-// ============================================
-loadCars();
+/* ---- RESULTS COUNT ---- */
+.results-bar {
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: 'Barlow Condensed', sans-serif;
+  letter-spacing: 0.5px;
+}
+
+/* ---- CARS LIST ---- */
+.cars-list {
+  padding: 0 12px 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---- CAR CARD ---- */
+.car-card {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+
+.car-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--alpine-blue);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.car-card:active {
+  background: var(--card-hover);
+  transform: scale(0.99);
+}
+
+.car-card::before { opacity: 1; }
+
+/* Car photo */
+.car-photo {
+  width: 64px;
+  height: 48px;
+  border-radius: 8px;
+  background: var(--border);
+  object-fit: cover;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  overflow: hidden;
+}
+
+.car-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* Car info */
+.car-info { flex: 1; min-width: 0; }
+
+.car-main {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.car-version {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.car-tags {
+  display: flex;
+  gap: 5px;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+
+.tag-cat { background: rgba(59,130,246,0.15); color: #60A5FA; }
+.tag-fab { background: rgba(201,168,76,0.15); color: var(--gold); }
+.tag-año { background: rgba(255,255,255,0.06); color: var(--text-dim); }
+.tag-caja-si { background: rgba(34,197,94,0.12); color: var(--green); }
+.tag-caja-no { background: rgba(255,255,255,0.06); color: var(--text-dim); }
+
+/* Right side */
+.car-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.car-dorsal {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--alpine-pink);
+  line-height: 1;
+}
+
+/* ---- FAB BUTTON ---- */
+.fab {
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  background: var(--alpine-pink);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 26px;
+  cursor: pointer;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(255,64,129,0.4);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.fab:active {
+  transform: scale(0.93);
+  box-shadow: 0 2px 10px rgba(255,64,129,0.3);
+}
+
+/* ---- MODAL ---- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.modal {
+  background: var(--dark);
+  border: 1.5px solid var(--border);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 20px 16px 40px;
+  transform: translateY(100%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-overlay.open .modal {
+  transform: translateY(0);
+}
+
+.modal-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 0 auto 16px;
+}
+
+.modal-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--text);
+  margin-bottom: 20px;
+}
+
+/* Detail modal */
+.detail-photo {
+  width: 100%;
+  height: 200px;
+  background: var(--card);
+  border-radius: 12px;
+  object-fit: cover;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 60px;
+  overflow: hidden;
+  border: 1.5px solid var(--border);
+}
+
+.detail-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.detail-field {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.detail-field.full { grid-column: 1 / -1; }
+
+.detail-label {
+  font-size: 10px;
+  font-family: 'Barlow Condensed', sans-serif;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.detail-value {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
+}
+
+/* ---- FORM ---- */
+.form-field {
+  margin-bottom: 14px;
+}
+
+.form-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.form-input, .form-select, .form-textarea {
+  width: 100%;
+  background: var(--black);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: 'Barlow', sans-serif;
+  font-size: 16px;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: var(--red);
+}
+
+.form-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.form-textarea { resize: vertical; min-height: 80px; }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Photo upload */
+.photo-upload {
+  width: 100%;
+  height: 120px;
+  background: var(--black);
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+
+.photo-upload:active { border-color: var(--red); }
+.photo-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.photo-upload-icon { font-size: 28px; margin-bottom: 6px; }
+.photo-upload-text { font-size: 13px; color: var(--text-dim); }
+
+.photo-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0; left: 0;
+  border-radius: 10px;
+}
+
+/* Buttons */
+.btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn:active { transform: scale(0.98); }
+
+.btn-primary { background: var(--alpine-blue); color: white; }
+.btn-primary:active { background: var(--red-dark); }
+.btn-secondary {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1.5px solid var(--border);
+  margin-top: 8px;
+}
+
+.btn-upload-photo {
+  background: rgba(59,130,246,0.15);
+  color: #60A5FA;
+  border: 1.5px solid rgba(59,130,246,0.3);
+  margin-bottom: 14px;
+  position: relative;
+}
+
+.btn-upload-photo input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+}
+
+/* Loading & empty */
+.loading {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-dim);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--red);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-dim);
+}
+
+.empty-icon { font-size: 48px; margin-bottom: 12px; }
+.empty-text { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; }
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--green);
+  color: white;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 10px 20px;
+  border-radius: 20px;
+  z-index: 500;
+  opacity: 0;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.toast.error { background: var(--red); }
+
+/* Separator */
+.modal-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+
+/* Photo action buttons in detail */
+.photo-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-sm {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+
+.btn-sm input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.btn-sm-photo { background: rgba(59,130,246,0.15); color: #60A5FA; }
+.btn-sm-delete { background: rgba(227,30,36,0.15); color: var(--red); }
