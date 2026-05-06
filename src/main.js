@@ -22,7 +22,7 @@ const CATEGORIES = ['Todos', 'F1', 'GT', 'LMP', 'Rally', 'Calle', 'NASCAR', 'Ind
 document.getElementById('app').innerHTML = `
   <div class="header">
     <div class="header-top">
-      <div class="logo">COLECCIÓN <span>RICKY</span> 🏎️</div>
+      <div class="logo">COLECCIÓN <span>RICKY</span> 🏔️</div>
       <div class="stats-pill" id="statsTotal">...</div>
     </div>
     <div class="search-wrap">
@@ -248,7 +248,7 @@ function openDetail(id) {
     </div>
 
     <button class="btn btn-secondary" id="editCarBtn">✏️ Editar</button>
-    <button class="btn btn-secondary" id="deleteCarBtn" style="color:#E31E24;border-color:rgba(227,30,36,0.3);margin-top:8px;">🗑️ Eliminar</button>
+    <button class="btn btn-secondary" id="deleteCarBtn" style="color:var(--alpine-pink);border-color:rgba(255,64,129,0.3);margin-top:8px;">🗑️ Eliminar</button>
   `;
 
   openOverlay('detailOverlay');
