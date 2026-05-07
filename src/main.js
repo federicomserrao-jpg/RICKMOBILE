@@ -290,7 +290,7 @@ function openDetail(id) {
     <div class="photo-actions">
       <button class="btn-sm btn-sm-photo" id="changePhotoBtn">
         📷 ${car.foto_url ? 'Cambiar foto' : 'Agregar foto'}
-        <input type="file" accept="image/*" capture="environment" id="changePhotoInput" />
+        <input type="file" accept="image/*" id="changePhotoInput" />
       </button>
       ${car.foto_url ? `<button class="btn-sm btn-sm-delete" id="deletePhotoBtn">🗑️ Quitar</button>` : ''}
     </div>` : ''}
@@ -380,7 +380,7 @@ function openForm(car = null) {
       <label class="form-label">Foto</label>
       <div class="btn btn-upload-photo">
         📷 ${car?.foto_url ? 'Cambiar foto' : 'Tomar / Subir foto'}
-        <input type="file" accept="image/*" capture="environment" id="formPhotoInput" />
+        <input type="file" accept="image/*" id="formPhotoInput" />
       </div>
     </div>
     <div class="form-grid">
