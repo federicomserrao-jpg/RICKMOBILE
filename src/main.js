@@ -8,13 +8,40 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // ============================================
 // AUTH
 // ============================================
-const USUARIO = 'admin';
-const CLAVE = 'ricky123';
+const USUARIOS = {
+  'admin':    { clave: 'ricky123',   rol: 'admin' },
+  'invitado': { clave: 'invitado123', rol: 'guest' },
+};
 const SESSION_KEY = 'rickmobile_auth';
+const THEME_KEY = 'rickmobile_theme';
+
+let currentRol = null;
+const isAdmin = () => currentRol === 'admin';
 
 function isLoggedIn() {
-  return sessionStorage.getItem(SESSION_KEY) === 'true';
+  const s = sessionStorage.getItem(SESSION_KEY);
+  if (!s) return false;
+  const parsed = JSON.parse(s);
+  currentRol = parsed.rol;
+  return true;
 }
+
+// Theme
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY) || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem(THEME_KEY, next);
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.textContent = next === 'dark' ? '☀️' : '🌙';
+}
+
+initTheme();
 
 function renderLogin() {
   document.getElementById('app').innerHTML = `
@@ -38,10 +65,12 @@ function renderLogin() {
   `;
 
   const doLogin = () => {
-    const user = document.getElementById('loginUser').value.trim();
+    const user = document.getElementById('loginUser').value.trim().toLowerCase();
     const pass = document.getElementById('loginPass').value.trim();
-    if (user === USUARIO && pass === CLAVE) {
-      sessionStorage.setItem(SESSION_KEY, 'true');
+    const match = USUARIOS[user];
+    if (match && match.clave === pass) {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ user, rol: match.rol }));
+      currentRol = match.rol;
       initApp();
     } else {
       const err = document.getElementById('loginError');
@@ -70,11 +99,16 @@ const CATEGORIES = ['Todos', 'F1', 'GT', 'LMP', 'Rally', 'Calle', 'NASCAR', 'Ind
 // RENDER APP SHELL
 // ============================================
 function initApp() {
+  const theme = document.documentElement.getAttribute('data-theme');
   document.getElementById('app').innerHTML = `
     <div class="header">
       <div class="header-top">
         <div class="logo">COLECCIÓN <span>RICKY</span> 🏎️</div>
-        <div class="stats-pill" id="statsTotal">...</div>
+        <div class="header-right">
+          ${!isAdmin() ? `<span class="guest-badge">👁️ Invitado</span>` : ''}
+          <div class="stats-pill" id="statsTotal">...</div>
+          <button class="theme-toggle" id="themeToggle">${theme === 'dark' ? '☀️' : '🌙'}</button>
+        </div>
       </div>
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
@@ -92,7 +126,7 @@ function initApp() {
       </div>
     </div>
 
-    <button class="fab" id="fabAdd" title="Agregar auto">＋</button>
+    ${isAdmin() ? `<button class="fab" id="fabAdd" title="Agregar auto">＋</button>` : ''}
 
     <div class="modal-overlay" id="detailOverlay">
       <div class="modal" id="detailModal">
@@ -116,7 +150,8 @@ function initApp() {
     searchQuery = e.target.value;
     applyFilters();
   });
-  document.getElementById('fabAdd').addEventListener('click', () => openForm());
+  document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+  if (isAdmin()) document.getElementById('fabAdd').addEventListener('click', () => openForm());
   ['detailOverlay', 'formOverlay'].forEach(id => {
     document.getElementById(id).addEventListener('click', (e) => {
       if (e.target.id === id) closeOverlay(id);
@@ -251,13 +286,14 @@ function openDetail(id) {
     <div class="detail-photo">
       ${car.foto_url ? `<img src="${car.foto_url}" alt="${car.modelo}" />` : `<span>${getCategoryEmoji(car.categoria)}</span>`}
     </div>
+    ${isAdmin() ? `
     <div class="photo-actions">
       <button class="btn-sm btn-sm-photo" id="changePhotoBtn">
         📷 ${car.foto_url ? 'Cambiar foto' : 'Agregar foto'}
         <input type="file" accept="image/*" capture="environment" id="changePhotoInput" />
       </button>
       ${car.foto_url ? `<button class="btn-sm btn-sm-delete" id="deletePhotoBtn">🗑️ Quitar</button>` : ''}
-    </div>
+    </div>` : ''}
     <div class="modal-separator"></div>
     <div class="detail-grid">
       <div class="detail-field"><div class="detail-label">Fabricante</div><div class="detail-value">${car.fabricante || '—'}</div></div>
@@ -272,39 +308,43 @@ function openDetail(id) {
       <div class="detail-field full"><div class="detail-label">Versión</div><div class="detail-value">${car.version || '—'}</div></div>
       ${car.notas ? `<div class="detail-field full"><div class="detail-label">Notas</div><div class="detail-value" style="font-size:14px;font-weight:400">${car.notas}</div></div>` : ''}
     </div>
+    ${isAdmin() ? `
     <button class="btn btn-secondary" id="editCarBtn">✏️ Editar</button>
-    <button class="btn btn-secondary" id="deleteCarBtn" style="color:var(--alpine-pink);border-color:rgba(255,64,129,0.3);margin-top:8px;">🗑️ Eliminar</button>
+    <button class="btn btn-secondary" id="deleteCarBtn" style="color:var(--alpine-pink);border-color:rgba(232,0,61,0.3);margin-top:8px;">🗑️ Eliminar</button>
+    ` : ''}
   `;
 
   openOverlay('detailOverlay');
 
-  document.getElementById('changePhotoInput').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (file) await uploadPhoto(car.id, file);
-  });
+  if (isAdmin()) {
+    document.getElementById('changePhotoInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) await uploadPhoto(car.id, file);
+    });
 
-  const delPhotoBtn = document.getElementById('deletePhotoBtn');
-  if (delPhotoBtn) delPhotoBtn.addEventListener('click', async () => {
-    await updateCarField(car.id, { foto_url: '' });
-    closeOverlay('detailOverlay');
-    showToast('Foto eliminada');
-  });
-
-  document.getElementById('editCarBtn').addEventListener('click', () => {
-    closeOverlay('detailOverlay');
-    openForm(car);
-  });
-
-  document.getElementById('deleteCarBtn').addEventListener('click', async () => {
-    if (!confirm(`¿Eliminar ${car.marca} ${car.modelo}?`)) return;
-    const { error } = await supabase.from('autos').delete().eq('id', car.id);
-    if (!error) {
-      allCars = allCars.filter(c => c.id !== car.id);
-      applyFilters(); updateStats(); renderFilters();
+    const delPhotoBtn = document.getElementById('deletePhotoBtn');
+    if (delPhotoBtn) delPhotoBtn.addEventListener('click', async () => {
+      await updateCarField(car.id, { foto_url: '' });
       closeOverlay('detailOverlay');
-      showToast('Auto eliminado');
-    }
-  });
+      showToast('Foto eliminada');
+    });
+
+    document.getElementById('editCarBtn').addEventListener('click', () => {
+      closeOverlay('detailOverlay');
+      openForm(car);
+    });
+
+    document.getElementById('deleteCarBtn').addEventListener('click', async () => {
+      if (!confirm(`¿Eliminar ${car.marca} ${car.modelo}?`)) return;
+      const { error } = await supabase.from('autos').delete().eq('id', car.id);
+      if (!error) {
+        allCars = allCars.filter(c => c.id !== car.id);
+        applyFilters(); updateStats(); renderFilters();
+        closeOverlay('detailOverlay');
+        showToast('Auto eliminado');
+      }
+    });
+  }
 }
 
 async function uploadPhoto(carId, file) {
